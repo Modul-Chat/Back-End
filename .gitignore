@@ -1,4 +1,3 @@
 /internal/ws
 /router
 .env
-main.go
