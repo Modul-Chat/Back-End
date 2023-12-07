@@ -1,8 +1,12 @@
 package rabbitmq
 
 import (
+	"context"
+	"encoding/json"
 	"example/tes-websocket/config"
+	"example/tes-websocket/internal/ws"
 	"fmt"
+	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
@@ -10,6 +14,8 @@ import (
 type Broker struct {
 	PublisherQueue amqp091.Queue
 	Channel *amqp091.Channel
+	Exchange string
+	RoutingKey string
 }
 
 func (b *Broker) SetUp(channel *amqp091.Channel) error {
@@ -68,6 +74,36 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 
 	b.PublisherQueue = queue
 	b.Channel = channel
+	b.Exchange = exchangeName
+	b.RoutingKey = routingKey
+
+	return nil
+}
+
+func (b *Broker) PublishMessage(message *ws.Message) error {
+	body, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("error marshaling message: %s", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = b.Channel.PublishWithContext(ctx,
+		b.Exchange,             // exchange
+		b.RoutingKey, 					// routing key
+		false,                 	// mandatory
+		false,                 	// immediate
+		amqp091.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		})
+
+	cancel()
+
+	if err != nil {
+		return fmt.Errorf("PublishMessage Error occurred: %s", err)
+	}
 
 	return nil
 }
