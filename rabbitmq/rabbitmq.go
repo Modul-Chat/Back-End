@@ -32,6 +32,16 @@ func InitBroker() (*amqp091.Connection, *amqp091.Channel, error) {
 		return nil, nil, fmt.Errorf("failed to set up RabbitMQ: %v", err)
 	}
 
+	// err = br.PublishMessage()
+	// if err != nil {
+	// 	return nil, nil, fmt.Errorf("failed to publish message to RabbitMQ: %v", err)
+	// }
+
+	err = br.ConsumeMessage()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to consume message: %v", err)
+	}
+
 	return mqConn, channel, nil
 }
 

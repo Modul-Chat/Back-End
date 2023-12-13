@@ -1,21 +1,29 @@
 package rabbitmq
 
 import (
-	"context"
+	// "context"
 	"encoding/json"
 	"example/tes-websocket/config"
-	"example/tes-websocket/internal/ws"
-	"fmt"
-	"time"
 
+	// "example/tes-websocket/internal/ws"
+	"fmt"
+	// "time"
+
+	"github.com/gin-gonic/gin"
 	"github.com/rabbitmq/amqp091-go"
 )
 
 type Broker struct {
 	PublisherQueue amqp091.Queue
-	Channel *amqp091.Channel
-	Exchange string
-	RoutingKey string
+	Channel        *amqp091.Channel
+	Exchange       string
+	RoutingKey     string
+}
+
+type Message struct {
+	SenderID   string `json:"senderID"`
+	ReceiverID string `json:"receiverID"`
+	Message    string `json:"message"`
 }
 
 func (b *Broker) SetUp(channel *amqp091.Channel) error {
@@ -54,7 +62,7 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 		false,     // no-wait
 		nil,       // arguments
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to declare a queue: %v", err)
 	}
@@ -80,30 +88,118 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 	return nil
 }
 
-func (b *Broker) PublishMessage(message *ws.Message) error {
-	body, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("error marshaling message: %s", err)
+// func (b *Broker) PublishMessage(c *gin.Context) error {
+// 	var message Message
+// 	c.ShouldBind(message)
+
+// 	body, err := json.Marshal(message)
+// 	if err != nil {
+// 		return fmt.Errorf("error marshaling message: %s", err)
+// 	}
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+
+// 	err = b.Channel.PublishWithContext(ctx,
+// 		b.Exchange,   // exchange
+// 		b.RoutingKey, // routing key
+// 		false,        // mandatory
+// 		false,        // immediate
+// 		amqp091.Publishing{
+// 			ContentType: "application/json",
+// 			Body:        body,
+// 		})
+
+// 	cancel()
+
+// 	if err != nil {
+// 		return fmt.Errorf("PublishMessage Error occurred: %s", err)
+// 	}
+
+// 	return nil
+// }
+
+func (b *Broker) SendMessage(c *gin.Context) {
+	var message1 Message
+	c.ShouldBind(&message1)
+
+	msg, _ := json.Marshal(message1)
+
+	message := amqp091.Publishing{
+		ContentType: "application/json",
+		Body:        msg,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err = b.Channel.PublishWithContext(ctx,
-		b.Exchange,             // exchange
-		b.RoutingKey, 					// routing key
-		false,                 	// mandatory
-		false,                 	// immediate
-		amqp091.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		})
-
-	cancel()
-
+	err := b.Channel.ExchangeDeclare(
+		"chat_exchange",
+		"direct",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
 	if err != nil {
-		return fmt.Errorf("PublishMessage Error occurred: %s", err)
+		panic(err)
 	}
 
+	err = b.Channel.Publish(
+		"chat_exchange",
+		"chat",
+		false,
+		false,
+		message,
+	)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (b *Broker) ConsumeMessage() error {
+	if b.Channel == nil {
+		return fmt.Errorf("channel is not set up for consuming messages")
+	}
+
+	queueName := config.EnvQueueName()
+
+	// Set up the consumer
+	msgs, err := b.Channel.Consume(
+		queueName, // queue
+		"",        // consumer
+		true,      // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to register a consumer: %v", err)
+	}
+
+	var forever chan struct{}
+	// Start consuming messages
+	go func() {
+		for msg := range msgs {
+			// Process the received message
+			fmt.Printf("Received a message: %s\n", msg.Body)
+			// Add your custom message processing logic here
+		}
+	}()
+
+	fmt.Printf("Started consuming messages from queue %s\n", queueName)
+	<-forever
 	return nil
+
+	// var forever chan struct{}
+
+	// go func() {
+	// 	for d := range msgs {
+	// 		var order OrderHeader
+	// 		json.Unmarshal(d.Body, &order)
+	// 		go sendEmailNotification(order.CustomerEmail)
+	// 	}
+	// }()
+	// log.Printf(" [*] Waiting for logs. To exit press CTRL+C")
+	// <-forever
 }
