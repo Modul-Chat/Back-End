@@ -1,13 +1,11 @@
 package rabbitmq
 
 import (
-	// "context"
 	"encoding/json"
 	"example/tes-websocket/config"
 
 	// "example/tes-websocket/internal/ws"
 	"fmt"
-	// "time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rabbitmq/amqp091-go"
@@ -18,6 +16,7 @@ type Broker struct {
 	Channel        *amqp091.Channel
 	Exchange       string
 	RoutingKey     string
+	ExchangeType	 string
 }
 
 type Message struct {
@@ -84,25 +83,40 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 	b.Channel = channel
 	b.Exchange = exchangeName
 	b.RoutingKey = routingKey
+	b.ExchangeType = exchangeType
 
 	return nil
 }
 
-// func (b *Broker) PublishMessage(c *gin.Context) error {
+// func (b *Broker) PublishMessage(c *gin.Context) {
 // 	var message Message
 // 	c.ShouldBind(message)
 
 // 	body, err := json.Marshal(message)
 // 	if err != nil {
-// 		return fmt.Errorf("error marshaling message: %s", err)
+// 		// return fmt.Errorf("error marshaling message: %s", err)
+// 		panic(err)
 // 	}
 
 // 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 // 	defer cancel()
 
+// 	err = b.Channel.ExchangeDeclare(
+// 		"chat_exchange",
+// 		"direct",
+// 		false,
+// 		false,
+// 		false,
+// 		false,
+// 		nil,
+// 	)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
 // 	err = b.Channel.PublishWithContext(ctx,
-// 		b.Exchange,   // exchange
-// 		b.RoutingKey, // routing key
+// 		"chat_exchange",//b.Exchange,   // exchange
+// 		"chat",// b.RoutingKey, // routing key
 // 		false,        // mandatory
 // 		false,        // immediate
 // 		amqp091.Publishing{
@@ -113,10 +127,11 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 // 	cancel()
 
 // 	if err != nil {
-// 		return fmt.Errorf("PublishMessage Error occurred: %s", err)
+// 		// return fmt.Errorf("PublishMessage Error occurred: %s", err)
+// 		panic(err)
 // 	}
 
-// 	return nil
+// 	// return nil
 // }
 
 func (b *Broker) SendMessage(c *gin.Context) {
@@ -130,22 +145,22 @@ func (b *Broker) SendMessage(c *gin.Context) {
 		Body:        msg,
 	}
 
-	err := b.Channel.ExchangeDeclare(
-		"chat_exchange",
-		"direct",
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		panic(err)
-	}
+	// err := b.Channel.ExchangeDeclare(
+	// 	b.Exchange,// "chat_exchange",
+	// 	b.ExchangeType,// "direct",
+	// 	false,
+	// 	false,
+	// 	false,
+	// 	false,
+	// 	nil,
+	// )
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	err = b.Channel.Publish(
-		"chat_exchange",
-		"chat",
+	err := b.Channel.Publish(
+		b.Exchange,// "chat_exchange",
+		b.RoutingKey,// "chat",
 		false,
 		false,
 		message,
