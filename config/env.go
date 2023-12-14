@@ -51,3 +51,21 @@ func EnvRoutingKey() string {
 
 	return os.Getenv("ROUTING_KEY")
 }
+
+func EnvMongoURI() string {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	return os.Getenv("MONGO_URI")
+}
+
+func EnvDatabase() string {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	return os.Getenv("DATABASE")
+}

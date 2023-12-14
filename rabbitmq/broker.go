@@ -1,14 +1,18 @@
 package rabbitmq
 
 import (
+	"context"
 	"encoding/json"
 	"example/tes-websocket/config"
+	"example/tes-websocket/database"
+	"time"
 
 	// "example/tes-websocket/internal/ws"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rabbitmq/amqp091-go"
+	// "go.mongodb.org/mongo-driver/bson"
 )
 
 type Broker struct {
@@ -174,6 +178,17 @@ func (b *Broker) ConsumeMessage() error {
 	if b.Channel == nil {
 		return fmt.Errorf("channel is not set up for consuming messages")
 	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	db, err := database.ConnectDB()
+	if err != nil {
+		return fmt.Errorf(err.Error())
+	}
+	defer db.Disconnect(ctx)
+
+	collection := database.GetCollection(db, "userss")
 
 	queueName := config.EnvQueueName()
 
@@ -198,6 +213,19 @@ func (b *Broker) ConsumeMessage() error {
 		for msg := range msgs {
 			// Process the received message
 			fmt.Printf("Received a message: %s\n", msg.Body)
+
+			// Unmarshal the message body into the Message struct
+			var receivedMessage Message
+			err := json.Unmarshal(msg.Body, &receivedMessage)
+			if err != nil {
+				fmt.Printf("Error unmarshaling message: %v\n", err)
+				continue
+			}
+
+			_, err = collection.InsertOne(context.TODO(), receivedMessage)
+			if err != nil {
+				panic(err)
+			}
 			// Add your custom message processing logic here
 		}
 	}()
