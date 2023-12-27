@@ -74,7 +74,7 @@ func setupGinServer() {
 	r := gin.Default()
 
 	// Define your Gin routes here
-	r.POST("/message", rabbitmq.GetRabbitMQBroker().SendMessage)
+	r.POST("/message", rabbitmq.GetRabbitMQBroker().SendMessageToQueueDB)
 
 	server := &http.Server{
 		Addr:    ":8080",

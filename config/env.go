@@ -16,13 +16,22 @@ func EnvRabbitMQURI() string {
 	return os.Getenv("RABBITMQ_URI")
 }
 
-func EnvExchangeName() string {
+func EnvExchangeNameSend() string {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	return os.Getenv("EXCHANGE_NAME")
+	return os.Getenv("EXCHANGE_NAME_SEND")
+}
+
+func EnvExchangeNameReceive() string {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	return os.Getenv("EXCHANGE_NAME_RECEIVE")
 }
 
 func EnvExchangeType() string {
@@ -34,22 +43,40 @@ func EnvExchangeType() string {
 	return os.Getenv("EXCHANGE_TYPE")
 }
 
-func EnvQueueName() string {
+func EnvQueueNameSend() string {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	return os.Getenv("QUEUE_NAME")
+	return os.Getenv("QUEUE_NAME_SEND")
 }
 
-func EnvRoutingKey() string {
+func EnvQueueNameReceive() string {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	return os.Getenv("ROUTING_KEY")
+	return os.Getenv("QUEUE_NAME_RECEIVE")
+}
+
+func EnvRoutingKeySend() string {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	return os.Getenv("ROUTING_KEY_SEND")
+}
+
+func EnvRoutingKeyReceive() string {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	return os.Getenv("ROUTING_KEY_RECEIVE")
 }
 
 func EnvMongoURI() string {

@@ -8,43 +8,69 @@ import (
 	"time"
 
 	// "example/tes-websocket/internal/ws"
+	"example/tes-websocket/utils"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
-	// "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Broker struct {
-	PublisherQueue amqp091.Queue
-	Channel        *amqp091.Channel
-	Exchange       string
-	RoutingKey     string
-	ExchangeType	 string
+	PublisherQueue 			amqp091.Queue
+	ReceiverQueue 			amqp091.Queue
+	Channel        			*amqp091.Channel
+	PublisherExchange		string
+	ReceiverExchange		string
+	PublisherRoutingKey string
+	ReceiverRoutingKey  string
+	ExchangeType	 			string
 }
 
 type Message struct {
-	SenderID   string `json:"senderID"`
-	ReceiverID string `json:"receiverID"`
-	Message    string `json:"message"`
+	MessageID	 uuid.UUID `json:"messageid" bson:"messageid"`
+	From			 string	`json:"from" bson:"from"`
+	To				 string `json:"to" bson:"to"`
+	Message    string `json:"message" bson:"message"`
 }
 
-func (b *Broker) SetUp(channel *amqp091.Channel) error {
-	exchangeName := config.EnvExchangeName()
-	exchangeType := config.EnvExchangeType()
-	queueName := config.EnvQueueName()
-	routingKey := config.EnvRoutingKey()
+// type MessageDB struct {
+// 	ID         string `json:"_id" bson:"_id"`
+// 	MessageID  uuid.UUID `json:"messageid" bson:"messageid"`
+// 	From			 string	`json:"from" bson:"from"`
+// 	To				 string `json:"to" bson:"to"`
+// 	Message    string `json:"message" bson:"message"`
+// }
 
-	if queueName == "" {
-		return fmt.Errorf("queue name is not set in environment variables")
+func (b *Broker) SetUp(channel *amqp091.Channel) error {
+	exchangeNameSend := config.EnvExchangeNameSend()
+	exchangeNameReceive := config.EnvExchangeNameReceive()
+	exchangeType := config.EnvExchangeType()
+	queueNameSend := config.EnvQueueNameSend()
+	queueNameReceive := config.EnvQueueNameReceive()
+	routingKeySend := config.EnvRoutingKeySend()
+	routingKeyReceive := config.EnvRoutingKeyReceive()
+
+	if queueNameSend == "" {
+		return fmt.Errorf("queue name send is not set in environment variables")
 	}
 
-	if routingKey == "" {
-		return fmt.Errorf("routing key is not set in environment variables")
+	if queueNameReceive == "" {
+		return fmt.Errorf("queue name receive is not set in environment variables")
+	}
+
+	if routingKeySend == "" {
+		return fmt.Errorf("routing key send is not set in environment variables")
+	}
+
+	if routingKeyReceive == "" {
+		return fmt.Errorf("routing key receive is not set in environment variables")
 	}
 
 	err := channel.ExchangeDeclare(
-		exchangeName, // Name of the exchange
+		exchangeNameSend, // Name of the exchange
 		exchangeType, // Type of the exchange: "direct", "fanout", "topic", etc.
 		false,        // Durable
 		false,        // AutoDelete
@@ -55,10 +81,24 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 	if err != nil {
 		return fmt.Errorf("failed to declare an exchange: %v", err)
 	}
-	fmt.Printf("Exchange %s declared\n", exchangeName)
+	fmt.Printf("Exchange %s declared\n", exchangeNameSend)
 
-	queue, err := channel.QueueDeclare(
-		queueName, // name
+	err = channel.ExchangeDeclare(
+		exchangeNameReceive, // Name of the exchange
+		exchangeType, // Type of the exchange: "direct", "fanout", "topic", etc.
+		false,        // Durable
+		false,        // AutoDelete
+		false,        // Internal
+		false,        // NoWait
+		nil,          // Arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare an exchange: %v", err)
+	}
+	fmt.Printf("Exchange %s declared\n", exchangeNameReceive)
+
+	queueSend, err := channel.QueueDeclare(
+		queueNameSend, // name
 		false,     // durable
 		false,     // delete when unused
 		false,     // exclusive
@@ -69,12 +109,26 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 	if err != nil {
 		return fmt.Errorf("failed to declare a queue: %v", err)
 	}
-	fmt.Printf("Queue %s declared\n", queueName)
+	fmt.Printf("Queue %s declared\n", queueNameSend)
+
+	queueReceive, err := channel.QueueDeclare(
+		queueNameReceive, // name
+		false,     // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to declare a queue: %v", err)
+	}
+	fmt.Printf("Queue %s declared\n", queueNameReceive)
 
 	err = channel.QueueBind(
-		queueName,    // queue name
-		routingKey,   // routing key
-		exchangeName, // exchange name
+		queueNameSend,    // queue name
+		routingKeySend,   // routing key
+		exchangeNameSend, // exchange name
 		false,        // no-wait
 		nil,          // arguments
 	)
@@ -83,10 +137,25 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 	}
 	fmt.Println("Queue Bound")
 
-	b.PublisherQueue = queue
+	err = channel.QueueBind(
+		queueNameReceive,    // queue name
+		routingKeyReceive,   // routing key
+		exchangeNameReceive, // exchange name
+		false,        // no-wait
+		nil,          // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to bind a queue: %v", err)
+	}
+	fmt.Println("Queue Bound")
+
+	b.PublisherQueue = queueSend
+	b.ReceiverQueue = queueReceive
 	b.Channel = channel
-	b.Exchange = exchangeName
-	b.RoutingKey = routingKey
+	b.PublisherExchange = exchangeNameSend
+	b.ReceiverExchange = exchangeNameReceive
+	b.PublisherRoutingKey = routingKeySend
+	b.ReceiverRoutingKey = routingKeyReceive
 	b.ExchangeType = exchangeType
 
 	return nil
@@ -138,11 +207,15 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 // 	// return nil
 // }
 
-func (b *Broker) SendMessage(c *gin.Context) {
+func (b *Broker) SendMessageToQueueDB(c *gin.Context) {
 	var message1 Message
+	message1.MessageID = utils.GenerateUUIDs()
 	c.ShouldBind(&message1)
 
 	msg, _ := json.Marshal(message1)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	message := amqp091.Publishing{
 		ContentType: "application/json",
@@ -162,9 +235,9 @@ func (b *Broker) SendMessage(c *gin.Context) {
 	// 	panic(err)
 	// }
 
-	err := b.Channel.Publish(
-		b.Exchange,// "chat_exchange",
-		b.RoutingKey,// "chat",
+	err := b.Channel.PublishWithContext(ctx,
+		b.PublisherExchange,// "chat_exchange",
+		b.PublisherRoutingKey,// "chat",
 		false,
 		false,
 		message,
@@ -190,7 +263,7 @@ func (b *Broker) ConsumeMessage() error {
 
 	collection := database.GetCollection(db, "userss")
 
-	queueName := config.EnvQueueName()
+	queueName := config.EnvQueueNameSend()
 
 	// Set up the consumer
 	msgs, err := b.Channel.Consume(
@@ -226,7 +299,21 @@ func (b *Broker) ConsumeMessage() error {
 			if err != nil {
 				panic(err)
 			}
-			// Add your custom message processing logic here
+
+			var result Message
+
+			filter := bson.D{{"messageid", receivedMessage.MessageID}}
+
+			err = collection.FindOne(context.TODO(), filter).Decode(&result)
+			if err != nil {
+				if err == mongo.ErrNoDocuments {
+					return
+				}
+				panic(err)
+			}
+			fmt.Printf("Found document: %+v\n", result)
+
+			
 		}
 	}()
 
