@@ -34,6 +34,7 @@ type Message struct {
 	From			 string	`json:"from" bson:"from"`
 	To				 string `json:"to" bson:"to"`
 	Message    string `json:"message" bson:"message"`
+	Timestamp	 int64 `json:"timestamp" bson:"timestamp"`
 }
 
 // type MessageDB struct {
@@ -210,6 +211,7 @@ func (b *Broker) SetUp(channel *amqp091.Channel) error {
 func (b *Broker) SendMessageToQueueDB(c *gin.Context) {
 	var message1 Message
 	message1.MessageID = utils.GenerateUUIDs()
+	message1.Timestamp = utils.CurrentTime()
 	c.ShouldBind(&message1)
 
 	msg, _ := json.Marshal(message1)
@@ -313,7 +315,27 @@ func (b *Broker) ConsumeMessage() error {
 			}
 			fmt.Printf("Found document: %+v\n", result)
 
-			
+			jsonData, err := json.Marshal(result)
+			if err != nil {
+				fmt.Println("Error marshaling JSON:", err)
+				return
+			}
+
+			message := amqp091.Publishing{
+				ContentType: "application/json",
+				Body: jsonData,
+			}
+
+			err = b.Channel.PublishWithContext(ctx,
+				b.ReceiverExchange,// "chat_exchange",
+				b.ReceiverRoutingKey,// "chat",
+				false,
+				false,
+				message,
+			)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}()
 
